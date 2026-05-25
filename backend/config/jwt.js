@@ -2,7 +2,7 @@ const path = require('path');
 const dotenv = require('dotenv');
 
 // Ensure backend .env is loaded even if modules are imported out of order.
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 const DEV_FALLBACK_SECRET = 'ats-resume-analyzer-dev-secret';
 

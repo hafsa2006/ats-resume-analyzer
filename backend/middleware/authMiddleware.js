@@ -2,9 +2,10 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const { assertJwtSecret } = require('../config/jwt');
+const { connectDatabase, isDatabaseConnected } = require('../config/database');
 
 const DB_UNAVAILABLE_MSG =
-  'Database is temporarily unavailable. Check your internet connection and MongoDB Atlas access, then try again.';
+  'Database is not connected. Wait a few seconds and retry, or fix MongoDB in backend/.env (see querySrv / Atlas IP whitelist).';
 
 function isDbError(err) {
   return (
@@ -17,8 +18,12 @@ function isDbError(err) {
 
 const authMiddleware = async (req, res, next) => {
   try {
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ message: DB_UNAVAILABLE_MSG, code: 'DB_UNAVAILABLE' });
+    if (!isDatabaseConnected()) {
+      try {
+        await connectDatabase();
+      } catch {
+        return res.status(503).json({ message: DB_UNAVAILABLE_MSG, code: 'DB_UNAVAILABLE' });
+      }
     }
 
     const jwtSecret = assertJwtSecret();
