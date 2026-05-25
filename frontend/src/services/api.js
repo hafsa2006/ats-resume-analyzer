@@ -1,12 +1,14 @@
 import axios from 'axios'
-
-const baseURL = import.meta.env.VITE_API_URL || '/api'
+import { API_BASE_URL } from '../config/api'
 
 const api = axios.create({
-  baseURL,
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 })
+
+export const checkApiHealth = () =>
+  api.get('/health', { timeout: 5000 }).then((res) => res.data)
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')

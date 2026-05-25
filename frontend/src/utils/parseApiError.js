@@ -1,7 +1,8 @@
 import { PDF_PARSE_MESSAGE } from '../components/PdfParseErrorAlert'
 
-export const BACKEND_OFFLINE_MSG =
-  'Cannot reach the API server. Open a second terminal and run: cd backend && npm run dev'
+export const BACKEND_OFFLINE_MSG = import.meta.env.DEV
+  ? 'Backend is not running. From the project root run: npm run dev'
+  : 'Cannot reach the API server. Check VITE_API_URL on Vercel and that your Render backend is running.'
 
 export function isNetworkError(err) {
   return (
@@ -39,11 +40,20 @@ export function getApiErrorMessage(err, fallback = 'Something went wrong.') {
   if (isDbUnavailable(err)) {
     return err.response?.data?.message || 'Database is temporarily unavailable. Please try again.'
   }
+  if (err?.response?.status === 404) {
+    return (
+      err.response?.data?.message ||
+      'API endpoint not found. Check VITE_API_URL (use your Render URL without a double /api path).'
+    )
+  }
   if (isBackendOffline(err)) {
     return err.response?.data?.message || BACKEND_OFFLINE_MSG
   }
   if (err?.code === 'ECONNABORTED' || err?.message?.includes('timeout')) {
     return 'Request timed out. The server may still be processing — try again or restart the backend.'
+  }
+  if (err?.message?.includes('status code 404')) {
+    return 'API endpoint not found. Verify VITE_API_URL and that the backend is deployed correctly.'
   }
   return err?.response?.data?.message || err?.message || fallback
 }

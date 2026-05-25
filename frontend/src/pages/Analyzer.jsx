@@ -11,8 +11,10 @@ import PdfParseErrorAlert, { PDF_PARSE_MESSAGE } from '../components/PdfParseErr
 import { uploadAndAnalyze } from '../services/api'
 import { exportAnalysisPdf } from '../utils/exportPdf'
 import { getApiErrorMessage, isPdfParseError, isBackendOffline } from '../utils/parseApiError'
+import { useApiHealth } from '../context/ApiHealthContext'
 
 export default function Analyzer() {
+  const { online: apiOnline, checking: apiChecking } = useApiHealth()
   const uploadResetRef = useRef(null)
   const [file, setFile] = useState(null)
   const [fileError, setFileError] = useState('')
@@ -50,6 +52,12 @@ export default function Analyzer() {
     }
     if (!jobDescription.trim()) {
       setError('Please enter the job description.')
+      return
+    }
+    if (!apiOnline && !apiChecking) {
+      const msg = 'Backend is not running. From the project root run: npm run dev'
+      setError(msg)
+      toast.error(msg, { id: 'backend-offline' })
       return
     }
 
@@ -125,7 +133,11 @@ export default function Analyzer() {
             {error && !pdfParseFailed && (
               <p className="text-sm text-danger" role="alert">{error}</p>
             )}
-            <GlowButton type="submit" disabled={loading} className="w-full">
+            <GlowButton
+              type="submit"
+              disabled={loading || (!apiOnline && !apiChecking)}
+              className="w-full"
+            >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Analyzing...

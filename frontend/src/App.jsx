@@ -2,6 +2,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { Toaster } from 'react-hot-toast'
 import { ThemeProvider } from './context/ThemeContext'
+import { ApiHealthProvider } from './context/ApiHealthContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import PageTransition from './components/ui/PageTransition'
 import Landing from './pages/Landing'
@@ -57,10 +58,12 @@ function AnimatedRoutes() {
 export default function App() {
   return (
     <ThemeProvider>
-      <ErrorBoundary>
-        <Toaster position="top-right" toastOptions={{ className: 'toast-premium', duration: 4000 }} />
-        <AnimatedRoutes />
-      </ErrorBoundary>
+      <ApiHealthProvider>
+        <ErrorBoundary>
+          <Toaster position="top-right" toastOptions={{ className: 'toast-premium', duration: 4000 }} />
+          <AnimatedRoutes />
+        </ErrorBoundary>
+      </ApiHealthProvider>
     </ThemeProvider>
   )
 }
