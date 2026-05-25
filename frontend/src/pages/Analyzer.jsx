@@ -10,11 +10,16 @@ import GlowButton from '../components/ui/GlowButton'
 import PdfParseErrorAlert, { PDF_PARSE_MESSAGE } from '../components/PdfParseErrorAlert'
 import { uploadAndAnalyze } from '../services/api'
 import { exportAnalysisPdf } from '../utils/exportPdf'
-import { getApiErrorMessage, isPdfParseError, isBackendOffline } from '../utils/parseApiError'
+import {
+  getApiErrorMessage,
+  isPdfParseError,
+  isServerUnavailable,
+  SERVER_WAKING_MSG,
+} from '../utils/parseApiError'
 import { useApiHealth } from '../context/ApiHealthContext'
 
 export default function Analyzer() {
-  const { online: apiOnline, checking: apiChecking } = useApiHealth()
+  const { online: apiOnline, checking: apiChecking, retry } = useApiHealth()
   const uploadResetRef = useRef(null)
   const [file, setFile] = useState(null)
   const [fileError, setFileError] = useState('')
@@ -54,10 +59,16 @@ export default function Analyzer() {
       setError('Please enter the job description.')
       return
     }
-    if (!apiOnline && !apiChecking) {
-      const msg = 'Backend is not running. From the project root run: npm run dev'
-      setError(msg)
-      toast.error(msg, { id: 'backend-offline' })
+    if (apiChecking) {
+      toast.loading(SERVER_WAKING_MSG, { id: 'server-waking' })
+      const ready = await retry()
+      toast.dismiss('server-waking')
+      if (!ready) {
+        toast.error(SERVER_WAKING_MSG, { id: 'server-offline' })
+        return
+      }
+    } else if (!apiOnline) {
+      toast.error(SERVER_WAKING_MSG, { id: 'server-offline' })
       return
     }
 
@@ -81,7 +92,7 @@ export default function Analyzer() {
         })
       } else {
         setError(msg)
-        toast.error(msg, { duration: isBackendOffline(err) ? 8000 : 4000 })
+        toast.error(msg, { duration: isServerUnavailable(err) ? 8000 : 4000 })
       }
     } finally {
       setLoading(false)
@@ -135,12 +146,16 @@ export default function Analyzer() {
             )}
             <GlowButton
               type="submit"
-              disabled={loading || (!apiOnline && !apiChecking)}
+              disabled={loading || apiChecking}
               className="w-full"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Analyzing...
+                </>
+              ) : apiChecking ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Connecting to server...
                 </>
               ) : (
                 'Analyze Resume'

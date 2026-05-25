@@ -7,12 +7,13 @@ const ApiHealthContext = createContext({
   retry: () => {},
 })
 
-const MAX_RETRIES = 5
-const RETRY_DELAY_MS = 1500
+const MAX_RETRIES = import.meta.env.PROD ? 8 : 5
+const RETRY_DELAY_MS = import.meta.env.PROD ? 3000 : 1500
+const POLL_MS = import.meta.env.PROD ? 45000 : 20000
 
 export function ApiHealthProvider({ children }) {
-  const [online, setOnline] = useState(true)
-  const [checking, setChecking] = useState(import.meta.env.DEV)
+  const [online, setOnline] = useState(false)
+  const [checking, setChecking] = useState(true)
 
   const runCheck = useCallback(async () => {
     setChecking(true)
@@ -34,10 +35,8 @@ export function ApiHealthProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return undefined
-
     runCheck()
-    const interval = setInterval(runCheck, 20000)
+    const interval = setInterval(runCheck, POLL_MS)
     return () => clearInterval(interval)
   }, [runCheck])
 

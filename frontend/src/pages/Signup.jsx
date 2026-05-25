@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { signup } from '../services/api'
+import { getApiErrorMessage } from '../utils/parseApiError'
 import PremiumBackground from '../components/ui/PremiumBackground'
 import GlassCard from '../components/ui/GlassCard'
 import GlowButton from '../components/ui/GlowButton'
@@ -26,14 +27,7 @@ export default function Signup() {
       localStorage.setItem('user', JSON.stringify(data.user))
       navigate(from, { replace: true })
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        (err?.request
-          ? 'Cannot reach server. Please start backend and refresh this page.'
-          : err?.message) ||
-        'Signup failed.'
-      setError(msg)
+      setError(getApiErrorMessage(err, 'Signup failed. Please try again.'))
     } finally {
       setLoading(false)
     }

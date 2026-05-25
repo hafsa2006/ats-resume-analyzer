@@ -1,14 +1,18 @@
 import axios from 'axios'
 import { API_BASE_URL } from '../config/api'
+import { withApiRetry } from '../utils/apiRetry'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
+  timeout: import.meta.env.PROD ? 45000 : 30000,
 })
 
 export const checkApiHealth = () =>
-  api.get('/health', { timeout: 5000 }).then((res) => res.data)
+  withApiRetry(
+    () => api.get('/health', { timeout: 15000 }).then((res) => res.data),
+    { maxAttempts: import.meta.env.PROD ? 6 : 4, baseDelayMs: 2000 }
+  )
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
@@ -27,34 +31,47 @@ api.interceptors.response.use(
   }
 )
 
+function call(fn) {
+  return withApiRetry(fn, {
+    maxAttempts: import.meta.env.PROD ? 4 : 2,
+    baseDelayMs: import.meta.env.PROD ? 3000 : 1500,
+  })
+}
+
 export const login = (email, password) =>
-  api.post('/auth/login', { email, password }).then((res) => res.data)
+  call(() => api.post('/auth/login', { email, password }).then((res) => res.data))
 
 export const signup = (name, email, password) =>
-  api.post('/auth/signup', { name, email, password }).then((res) => res.data)
+  call(() => api.post('/auth/signup', { name, email, password }).then((res) => res.data))
 
 export const uploadAndAnalyze = (formData) =>
-  api.post('/analysis/run', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 120000,
-  }).then((res) => res.data)
+  withApiRetry(
+    () =>
+      api
+        .post('/analysis/run', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000,
+        })
+        .then((res) => res.data),
+    { maxAttempts: import.meta.env.PROD ? 3 : 2, baseDelayMs: 4000 }
+  )
 
 export const getHistory = () =>
-  api.get('/analysis/history').then((res) => res.data)
+  call(() => api.get('/analysis/history').then((res) => res.data))
 
 export const getAnalysisById = (id) =>
-  api.get(`/analysis/${id}`).then((res) => res.data)
+  call(() => api.get(`/analysis/${id}`).then((res) => res.data))
 
 export const getDashboardStats = () =>
-  api.get('/analysis/stats').then((res) => res.data)
+  call(() => api.get('/analysis/stats').then((res) => res.data))
 
 export const getProfile = () =>
-  api.get('/user/profile').then((res) => res.data)
+  call(() => api.get('/user/profile').then((res) => res.data))
 
 export const updateProfile = (data) =>
-  api.put('/user/profile', data).then((res) => res.data)
+  call(() => api.put('/user/profile', data).then((res) => res.data))
 
 export const updatePreferences = (data) =>
-  api.put('/user/preferences', data).then((res) => res.data)
+  call(() => api.put('/user/preferences', data).then((res) => res.data))
 
 export default api

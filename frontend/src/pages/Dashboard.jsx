@@ -14,7 +14,8 @@ import { getDashboardStats } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
 import { getChartTheme, ChartGradients } from '../utils/chartTheme'
 import { getMockDashboardStats } from '../utils/mockDashboardStats'
-import { getApiErrorMessage, isBackendOffline } from '../utils/parseApiError'
+import { getApiErrorMessage, isServerUnavailable, SERVER_WAKING_MSG } from '../utils/parseApiError'
+import { useApiHealth } from '../context/ApiHealthContext'
 
 const COLORS = ['#6366F1', '#8B5CF6', '#22C55E', '#F59E0B']
 
@@ -33,6 +34,7 @@ const item = {
 
 export default function Dashboard() {
   const { theme } = useTheme()
+  const { online: apiOnline, checking: apiChecking } = useApiHealth()
   const chart = getChartTheme(theme)
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -40,27 +42,37 @@ export default function Dashboard() {
   const [offline, setOffline] = useState(false)
 
   useEffect(() => {
+    if (apiChecking) return undefined
+
+    setLoading(true)
     getDashboardStats()
       .then((data) => {
         setStats(data)
-        setOffline(Boolean(data?.mock))
+        setOffline(Boolean(data?.mock) && import.meta.env.DEV)
+        setError('')
       })
       .catch((err) => {
-        const apiOffline = err.response?.status === 503 || err.response?.data?.offline
-        if (isBackendOffline(err)) {
-          setStats(getMockDashboardStats())
-          setOffline(true)
-          setError(getApiErrorMessage(err, 'Failed to load dashboard.'))
+        if (isServerUnavailable(err)) {
+          if (import.meta.env.DEV) {
+            setStats(getMockDashboardStats())
+            setOffline(true)
+          }
+          setError(getApiErrorMessage(err, SERVER_WAKING_MSG))
           return
         }
         setError(getApiErrorMessage(err, 'Failed to load dashboard.'))
       })
       .finally(() => setLoading(false))
-  }, [])
 
-  if (loading) {
+    return undefined
+  }, [apiChecking, apiOnline])
+
+  if (loading || apiChecking) {
     return (
-      <DashboardLayout title="Dashboard" subtitle="Loading analytics...">
+      <DashboardLayout
+        title="Dashboard"
+        subtitle={apiChecking ? SERVER_WAKING_MSG : 'Loading analytics...'}
+      >
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
           {[1, 2, 3, 4].map((i) => <SkeletonCard key={i} />)}
         </div>
