@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const { assertJwtSecret } = require('../config/jwt');
-const { connectDatabase, isDatabaseConnected } = require('../config/database');
+const { isDatabaseConnected, waitForDatabase } = require('../config/database');
 
 const DB_UNAVAILABLE_MSG =
   'Database is not connected. Wait a few seconds and retry, or fix MongoDB in backend/.env (see querySrv / Atlas IP whitelist).';
@@ -19,9 +19,8 @@ function isDbError(err) {
 const authMiddleware = async (req, res, next) => {
   try {
     if (!isDatabaseConnected()) {
-      try {
-        await connectDatabase();
-      } catch {
+      const ready = await waitForDatabase(12000);
+      if (!ready) {
         return res.status(503).json({ message: DB_UNAVAILABLE_MSG, code: 'DB_UNAVAILABLE' });
       }
     }

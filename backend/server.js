@@ -14,7 +14,12 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const mongoose = require('mongoose');
-const { connectDatabase, setupDatabaseEvents, isDatabaseConnected } = require('./config/database');
+const {
+  connectDatabase,
+  setupDatabaseEvents,
+  isDatabaseConnected,
+  pingDatabase,
+} = require('./config/database');
 
 const authRoutes = require('./routes/authRoutes');
 
@@ -38,7 +43,13 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  if (!isDatabaseConnected()) {
+    connectDatabase().catch(() => {});
+  } else {
+    pingDatabase().catch(() => {});
+  }
+
   const dbState = mongoose.connection.readyState;
   const dbStatus = dbState === 1 ? 'connected' : dbState === 2 ? 'connecting' : 'disconnected';
   res.json({
@@ -63,15 +74,18 @@ app.use((err, req, res, _next) => {
 
 const HOST = process.env.HOST || '0.0.0.0';
 
-mongoose.set('strictQuery', true);
 setupDatabaseEvents();
 
-app.listen(PORT, HOST, () => {
+app.listen(PORT, HOST, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/api/health`);
-  connectDatabase().catch(() => {
-    console.warn('API is running — auth/analysis need DB until MongoDB connects.');
-  });
+  try {
+    await connectDatabase();
+    await pingDatabase();
+    console.log('MongoDB keep-alive monitor active');
+  } catch {
+    console.warn('API is running — MongoDB will keep retrying in the background.');
+  }
 });
 
 process.on('unhandledRejection', (reason) => {
