@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const Analysis = require('../models/Analysis');
-const { extractResumeText } = require('../utils/extractResumeText');
+const { extractResumeText, PdfProcessingError } = require('../utils/extractResumeText');
 const { analyzeResumeWithJob } = require('../utils/geminiService');
 const { getMockDashboardStats } = require('../utils/mockDashboardStats');
 const path = require('path');
@@ -59,7 +59,14 @@ async function runAnalysis(req, res) {
 
     res.status(201).json(formatAnalysisResponse(analysis));
   } catch (err) {
-    res.status(500).json({ message: err.message || 'Analysis failed.' });
+    if (err instanceof PdfProcessingError) {
+      return res.status(422).json({
+        message: err.userMessage,
+        code: err.code,
+      });
+    }
+    const status = err.message?.includes('Job description') || err.message?.includes('required') ? 400 : 500;
+    res.status(status).json({ message: err.message || 'Analysis failed.' });
   } finally {
     if (filePath && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (e) {}

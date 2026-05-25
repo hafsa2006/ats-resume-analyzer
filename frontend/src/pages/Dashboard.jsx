@@ -13,7 +13,8 @@ import { SkeletonCard } from '../components/ui/Skeleton'
 import { getDashboardStats } from '../services/api'
 import { useTheme } from '../context/ThemeContext'
 import { getChartTheme, ChartGradients } from '../utils/chartTheme'
-import { getMockDashboardStats, isNetworkError } from '../utils/mockDashboardStats'
+import { getMockDashboardStats } from '../utils/mockDashboardStats'
+import { getApiErrorMessage, isBackendOffline } from '../utils/parseApiError'
 
 const COLORS = ['#6366F1', '#8B5CF6', '#22C55E', '#F59E0B']
 
@@ -46,16 +47,13 @@ export default function Dashboard() {
       })
       .catch((err) => {
         const apiOffline = err.response?.status === 503 || err.response?.data?.offline
-        if (isNetworkError(err) || apiOffline) {
+        if (isBackendOffline(err)) {
           setStats(getMockDashboardStats())
           setOffline(true)
-          setError(
-            err.response?.data?.message ||
-              'Backend is not running. Showing demo data — start it with: cd backend && npm run dev'
-          )
+          setError(getApiErrorMessage(err, 'Failed to load dashboard.'))
           return
         }
-        setError(err.response?.data?.message || 'Failed to load dashboard.')
+        setError(getApiErrorMessage(err, 'Failed to load dashboard.'))
       })
       .finally(() => setLoading(false))
   }, [])

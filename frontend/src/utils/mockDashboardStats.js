@@ -33,7 +33,3 @@ export function getMockDashboardStats() {
     mock: true,
   }
 }
-
-export function isNetworkError(err) {
-  return !err?.response && (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error')
-}

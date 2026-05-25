@@ -1,9 +1,26 @@
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const { assertJwtSecret } = require('../config/jwt');
 
+const DB_UNAVAILABLE_MSG =
+  'Database is temporarily unavailable. Check your internet connection and MongoDB Atlas access, then try again.';
+
+function isDbError(err) {
+  return (
+    mongoose.connection.readyState !== 1 ||
+    err?.name === 'MongoServerSelectionError' ||
+    err?.name === 'MongoNetworkError' ||
+    err?.name === 'MongoTimeoutError'
+  );
+}
+
 const authMiddleware = async (req, res, next) => {
   try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ message: DB_UNAVAILABLE_MSG, code: 'DB_UNAVAILABLE' });
+    }
+
     const jwtSecret = assertJwtSecret();
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -11,7 +28,7 @@ const authMiddleware = async (req, res, next) => {
     }
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, jwtSecret);
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await User.findById(decoded.id).select('-password').maxTimeMS(8000);
     if (!user) {
       return res.status(401).json({ message: 'Invalid token.' });
     }
@@ -21,7 +38,11 @@ const authMiddleware = async (req, res, next) => {
     if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
       return res.status(401).json({ message: 'Invalid or expired token.' });
     }
-    next(err);
+    if (isDbError(err)) {
+      return res.status(503).json({ message: DB_UNAVAILABLE_MSG, code: 'DB_UNAVAILABLE' });
+    }
+    console.error('Auth middleware error:', err.message);
+    return res.status(500).json({ message: 'Authentication failed. Please try again.' });
   }
 };
 

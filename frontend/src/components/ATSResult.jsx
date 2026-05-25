@@ -3,7 +3,7 @@ import {
   CheckCircle2, XCircle, Lightbulb, TrendingUp, AlertTriangle,
   Target, Brain, MessageSquare, Briefcase,
 } from 'lucide-react'
-import ScoreRing from './ui/ScoreRing'
+import AtsScoreCard from './AtsScoreCard'
 import GlassCard from './ui/GlassCard'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
@@ -48,17 +48,11 @@ export default function ATSResult({
   return (
     <div className="space-y-6">
       <div className="grid lg:grid-cols-3 gap-6">
-        <GlassCard className="p-8 flex flex-col items-center justify-center lg:col-span-1">
-          <ScoreRing score={atsScore} />
-          <p className="mt-4 text-sm text-text-muted text-center">
-            Compatibility: {insights?.compatibilityPercent ?? atsScore}%
-          </p>
-          {onExport && (
-            <button type="button" onClick={onExport} className="mt-4 text-sm text-primary hover:underline">
-              Export PDF Report
-            </button>
-          )}
-        </GlassCard>
+        <AtsScoreCard
+          atsScore={atsScore}
+          compatibilityPercent={insights?.compatibilityPercent}
+          onExport={onExport}
+        />
 
         <GlassCard className="p-6 lg:col-span-2">
           <h3 className="section-title mb-4 flex items-center gap-2">

@@ -5,6 +5,7 @@ const baseURL = import.meta.env.VITE_API_URL || '/api'
 const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 })
 
 api.interceptors.request.use((config) => {
@@ -33,6 +34,7 @@ export const signup = (name, email, password) =>
 export const uploadAndAnalyze = (formData) =>
   api.post('/analysis/run', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000,
   }).then((res) => res.data)
 
 export const getHistory = () =>

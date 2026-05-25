@@ -49,6 +49,13 @@ app.use('/api/user', require('./routes/userRoutes'));
 const analysisRoutes = require('./routes/analysisRoutes');
 app.use('/api/analysis', analysisRoutes);
 
+app.use((err, req, res, _next) => {
+  console.error('Unhandled error:', err.message || err);
+  if (!res.headersSent) {
+    res.status(500).json({ message: err.message || 'Internal server error.' });
+  }
+});
+
 const HOST = process.env.HOST || '0.0.0.0';
 const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/ats_analyzer';
 
@@ -59,7 +66,10 @@ app.listen(PORT, HOST, () => {
 });
 
 mongoose.set('strictQuery', true);
-mongoose.connect(mongoUri)
+mongoose.connect(mongoUri, {
+  serverSelectionTimeoutMS: 10000,
+  socketTimeoutMS: 45000,
+})
   .then(() => console.log('MongoDB connected'))
   .catch((err) => {
     console.error('MongoDB connection error:', err.message);
@@ -68,4 +78,8 @@ mongoose.connect(mongoUri)
 
 mongoose.connection.on('disconnected', () => {
   console.warn('MongoDB disconnected — stats and auth may use fallbacks.');
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
 });
