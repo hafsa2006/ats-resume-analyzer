@@ -1,5 +1,7 @@
 import axios from 'axios'
-import { API_BASE_URL } from '../config/api'
+import { API_URL, API_BASE_URL, getApiUrl } from '../config/api'
+
+export { API_URL, API_BASE_URL, getApiUrl }
 import { withApiRetry } from '../utils/apiRetry'
 
 const api = axios.create({

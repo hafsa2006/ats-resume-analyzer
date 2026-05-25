@@ -1,28 +1,39 @@
 /**
- * Backend origin for API requests (no trailing slash, no /api suffix).
- * Production (Vercel): VITE_API_URL=https://your-app.onrender.com
- * Local dev: set VITE_API_URL in .env.local, or leave unset to use Vite /api proxy
+ * Backend API origin (no trailing slash).
+ * Set VITE_API_URL in .env / .env.production or Vercel project settings.
  */
 export const API_URL = import.meta.env.VITE_API_URL ?? ''
 
-function resolveApiBaseUrl() {
-  const raw = API_URL.trim()
-  if (!raw) return '/api'
+/** Fallback when production build runs without VITE_API_URL (e.g. missing Vercel env) */
+const PRODUCTION_API_ORIGIN = 'https://ats-resume-backend-k5ru.onrender.com'
 
-  const withoutTrailingSlash = raw.replace(/\/+$/, '')
-  // Support VITE_API_URL with or without /api suffix
-  if (withoutTrailingSlash.endsWith('/api')) {
-    return withoutTrailingSlash
+function getApiOrigin() {
+  const fromEnv = API_URL.trim()
+  if (fromEnv) return fromEnv.replace(/\/+$/, '')
+
+  if (import.meta.env.PROD) {
+    return PRODUCTION_API_ORIGIN
   }
-  return `${withoutTrailingSlash}/api`
+
+  return ''
 }
 
-/** Base path for axios: ${API_URL}/api */
+function resolveApiBaseUrl() {
+  const origin = getApiOrigin()
+  if (!origin) return '/api'
+
+  if (origin.endsWith('/api')) {
+    return origin
+  }
+  return `${origin}/api`
+}
+
+/** Axios base URL → ${API_URL}/api */
 export const API_BASE_URL = resolveApiBaseUrl()
 
 /**
- * Build a full API URL for fetch requests.
- * @param {string} path - e.g. "/auth/login" or "analysis/run"
+ * Full URL for fetch: `${API_URL}/api/...`
+ * @param {string} path - e.g. "/auth/login"
  */
 export function getApiUrl(path = '') {
   const segment = path.startsWith('/') ? path : `/${path}`
