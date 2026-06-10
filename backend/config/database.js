@@ -1,11 +1,12 @@
 const dns = require('dns');
 const mongoose = require('mongoose');
 
+// Windows default DNS often fails SRV (querySrv ECONNREFUSED) — use public resolvers
+dns.setServers(['8.8.8.8', '1.1.1.1', '4.2.2.2']);
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
 }
 
-/** Stable pool + keep sockets alive (reduces Atlas idle disconnects) */
 const CONNECT_OPTIONS = {
   serverSelectionTimeoutMS: 30000,
   connectTimeoutMS: 30000,
@@ -31,6 +32,7 @@ let reconnectAttempt = 0;
 let connectPromise = null;
 let pingInterval = null;
 let lastWorkingUri = null;
+let resolvedStandardUri = null;
 
 mongoose.set('strictQuery', true);
 mongoose.set('bufferCommands', true);
@@ -43,25 +45,88 @@ function maskUri(uri) {
   return uri.replace(/:([^:@/]+)@/, ':****@');
 }
 
-function getConnectionCandidates() {
+function parseSrvUri(srvUri) {
+  const match = srvUri.match(/^mongodb\+srv:\/\/([^@]+)@([^/]+)\/([^?]*)(\?.*)?$/);
+  if (!match) return null;
+  return {
+    credentials: match[1],
+    clusterHost: match[2],
+    database: match[3] || 'ats_analyzer',
+    query: (match[4] || '').replace(/^\?/, ''),
+  };
+}
+
+/** Convert mongodb+srv → mongodb:// using reliable DNS (fixes Windows querySrv ECONNREFUSED) */
+async function convertSrvToStandard(srvUri) {
+  if (resolvedStandardUri) return resolvedStandardUri;
+
+  const parsed = parseSrvUri(srvUri);
+  if (!parsed) return null;
+
+  try {
+    const records = await dns.promises.resolveSrv(`_mongodb._tcp.${parsed.clusterHost}`);
+    if (!records.length) return null;
+
+    const hosts = records.map((r) => `${r.name}:${r.port}`).join(',');
+    const params = new URLSearchParams(parsed.query);
+    params.set('ssl', 'true');
+    params.set('authSource', 'admin');
+
+    const standardUri = `mongodb://${parsed.credentials}@${hosts}/${parsed.database}?${params.toString()}`;
+    resolvedStandardUri = standardUri;
+    console.log('Resolved MongoDB SRV → standard connection string');
+    return standardUri;
+  } catch (err) {
+    console.warn('SRV DNS resolve failed:', err.message);
+    return null;
+  }
+}
+
+async function buildConnectionCandidates() {
   const list = [];
 
   if (lastWorkingUri) list.push(lastWorkingUri);
-  list.push(
-    process.env.MONGO_URI,
+
+  const envUris = [
     process.env.MONGO_URI_STANDARD,
+    process.env.MONGO_URI,
     process.env.MONGODB_URI,
-  );
+  ]
+    .map((u) => (typeof u === 'string' ? u.trim() : ''))
+    .filter(Boolean);
+
+  for (const uri of envUris) {
+    if (uri.startsWith('mongodb+srv://')) {
+      const standard = await convertSrvToStandard(uri);
+      if (standard) list.push(standard);
+    }
+    list.push(uri);
+  }
 
   if (process.env.USE_LOCAL_MONGO === 'true') {
     list.push('mongodb://127.0.0.1:27017/ats_analyzer');
   }
 
-  if (!list.filter(Boolean).length) {
+  if (!list.length) {
     list.push('mongodb://127.0.0.1:27017/ats_analyzer');
   }
 
-  return [...new Set(list.map((u) => (typeof u === 'string' ? u.trim() : '')).filter(Boolean))];
+  return [...new Set(list)];
+}
+
+function getConnectionCandidates() {
+  const sync = [
+    lastWorkingUri,
+    process.env.MONGO_URI_STANDARD,
+    resolvedStandardUri,
+    process.env.MONGO_URI,
+    process.env.MONGODB_URI,
+    process.env.USE_LOCAL_MONGO === 'true' ? 'mongodb://127.0.0.1:27017/ats_analyzer' : null,
+  ]
+    .map((u) => (typeof u === 'string' ? u.trim() : ''))
+    .filter(Boolean);
+
+  return [...new Set(sync.length ? sync : ['mongodb://127.0.0.1:27017/ats_analyzer'])];
 }
 
 function isSrvRefusedError(err) {
@@ -73,18 +138,15 @@ function printConnectionHelp(lastError) {
   console.error('\n--- MongoDB connection failed ---');
   console.error(lastError?.message || 'Unknown error');
   console.error('\nFix (pick one):');
-  console.error('1. Atlas → Network Access → Add IP Address (0.0.0.0/0 for dev)');
-  console.error('2. Atlas → Connect → Drivers → STANDARD string → MONGO_URI_STANDARD in .env');
-  console.error('3. USE_LOCAL_MONGO=true with local MongoDB installed');
-  console.error('4. Disable VPN if querySrv ECONNREFUSED\n');
+  console.error('1. Atlas → Network Access → allow your IP (or 0.0.0.0/0 for dev)');
+  console.error('2. Set MONGO_URI_STANDARD in backend/.env (standard mongodb:// string)');
+  console.error('3. USE_LOCAL_MONGO=true with local MongoDB\n');
 }
 
 async function tryConnectOnce(uri) {
   const state = mongoose.connection.readyState;
 
-  if (state === 1) {
-    return mongoose.connection;
-  }
+  if (state === 1) return mongoose.connection;
 
   if (state === 2) {
     await new Promise((resolve, reject) => {
@@ -105,16 +167,25 @@ async function tryConnectOnce(uri) {
     await mongoose.disconnect().catch(() => {});
   }
 
-  await mongoose.connect(uri, CONNECT_OPTIONS);
+  const options = { ...CONNECT_OPTIONS };
+  if (uri.startsWith('mongodb+srv://')) {
+    delete options.family;
+  }
+
+  await mongoose.connect(uri, options);
   lastWorkingUri = uri;
   return mongoose.connection;
 }
 
 async function performConnect() {
-  const candidates = getConnectionCandidates();
+  const candidates = await buildConnectionCandidates();
   let lastError = null;
 
   for (const uri of candidates) {
+    if (uri.startsWith('mongodb+srv://') && resolvedStandardUri) {
+      continue;
+    }
+
     for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt += 1) {
       try {
         await tryConnectOnce(uri);
@@ -130,7 +201,7 @@ async function performConnect() {
       }
     }
     if (isSrvRefusedError(lastError)) {
-      console.warn('SRV/DNS failed — trying next URI...');
+      console.warn('Trying next connection string...');
     }
   }
 
@@ -245,7 +316,6 @@ function isDatabaseConnected() {
   return mongoose.connection.readyState === 1;
 }
 
-/** Wait until DB is up (for critical routes) */
 async function waitForDatabase(timeoutMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {

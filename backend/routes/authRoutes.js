@@ -3,9 +3,23 @@ const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { assertJwtSecret } = require('../config/jwt');
+const { waitForDatabase } = require('../config/database');
+
+async function requireDb(req, res) {
+  const ready = await waitForDatabase(15000);
+  if (!ready) {
+    res.status(503).json({
+      message: 'Database is reconnecting. Please wait a few seconds and try again.',
+      code: 'DB_UNAVAILABLE',
+    });
+    return false;
+  }
+  return true;
+}
 
 router.post('/signup', async (req, res) => {
   try {
+    if (!(await requireDb(req, res))) return;
     const jwtSecret = assertJwtSecret();
     const { name, email, password } = req.body || {};
     const emailNorm = typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -40,6 +54,7 @@ router.post('/signup', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
+    if (!(await requireDb(req, res))) return;
     const jwtSecret = assertJwtSecret();
     const { email, password } = req.body || {};
     const emailNorm = typeof email === 'string' ? email.trim().toLowerCase() : '';

@@ -5,7 +5,7 @@ const { assertJwtSecret } = require('../config/jwt');
 const { isDatabaseConnected, waitForDatabase } = require('../config/database');
 
 const DB_UNAVAILABLE_MSG =
-  'Database is not connected. Wait a few seconds and retry, or fix MongoDB in backend/.env (see querySrv / Atlas IP whitelist).';
+  'Database is reconnecting. Please wait a few seconds and try again.';
 
 function isDbError(err) {
   return (
