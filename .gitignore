@@ -1,6 +1,70 @@
-node_modules
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment & secrets
 .env
-dist
-backend/.env
-frontend/node_modules
-backend/node_modules
+.env.*
+!.env.example
+!**/.env.example
+
+# Build output
+dist/
+dist-ssr/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime / uploads (may contain user PII)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# Caches
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Certificates & keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+id_rsa*
+*.keystore
+
+# Misc
+*.tgz
+.eslintcache
